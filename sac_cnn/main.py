@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import optim
 from Env import environment
-from network import *
+from net_Lin import *
 import matplotlib.pyplot as plt
 import csv
 import cv2
@@ -146,6 +146,13 @@ class agent():
             writer.writerow(['平均奖励', mean_reward])
             writer.writerow(['奖励加总', reward_list])
 
+    def save_(self):
+        torch.save(self.actor.state_dict(), './model/model_params.pth')
+
+    def save_best(self):
+        print('储存最好的model')
+        torch.save(self.actor.state_dict(), 'model/model_best_.pth')
+
 
 if __name__ == '__main__':
     pi_lr = 3e-4
@@ -191,7 +198,7 @@ if __name__ == '__main__':
             episode_step += 1
             if episode_step == 200:
                 env.get_bummper = True
-                reward = -5
+                reward = -50
             print('reward=', reward)
             replay = a.Buffers.write_Buffers(state, next_state, reward, action, done)
             #
@@ -205,8 +212,8 @@ if __name__ == '__main__':
                 print('reward_list', sum(reward_list))
                 reward_list_.append(sum(reward_list))
                 reward_list_mean.append(np.mean(reward_list_))
-                # if reward_list_[-1] == max(reward_list_):
-                #     a.save_best()
+                if reward_list_[-1] == max(reward_list_):
+                    a.save_best()
                 break
 
             if env.get_bummper:
@@ -214,13 +221,13 @@ if __name__ == '__main__':
                 print('reward_list', sum(reward_list))
                 reward_list_.append(sum(reward_list))
                 reward_list_mean.append(np.mean(reward_list_))
-                # if reward_list_[-1] == max(reward_list_):
-                #     a.save_best()
+                if reward_list_[-1] == max(reward_list_):
+                    a.save_best()
                 break
 
             rate.sleep()
     a.save_variable(b_list, reward_list_mean, reward_list_)
-    # a.save_()
+    a.save_()
     plt.plot(b_list, reward_list_mean)
     plt.show()
     l1, = plt.plot(b_list, reward_list_mean)

@@ -2,6 +2,7 @@ import csv
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import pandas as pd
 
 
 class draw():
@@ -30,7 +31,10 @@ if __name__ == '__main__':
     path_1 = 'result/sac.csv'
     path_2 = 'result/sac_2.csv'
     path_3 = 'result/sac_3.csv'
-    path_list = [path_1, path_2, path_3]
+    path_4 = 'result/sac_cnn.csv'
+    path_5 = 'result/sac_cnn_1.csv'
+    path_6 = 'result/sac_cnn.csv_2'
+    path_list = [path_1, path_2, path_3, path_4, path_5, path_6]
     d = draw()
     batch_ = []
     mean_reward_ = []
@@ -48,7 +52,8 @@ if __name__ == '__main__':
     # # plt.legend(handles=[l1, l2], labels=['reward_mean', 'reward'], loc='best')
     # plt.show()
     sns.set()
-    mean_rewards = np.concatenate((mean_reward_[0], mean_reward_[1], mean_reward_[2]))  # 合并数组
+    sac = np.concatenate((mean_reward_[0], mean_reward_[1], mean_reward_[2]))  # 合并数组
+    sac_cnn = np.concatenate((mean_reward_[3], mean_reward_[4], mean_reward_[5]))  # 合并数组
 
     rewards = np.concatenate((reward_[0], reward_[1], reward_[2]))  # 合并数组
     # print(rewards)
@@ -56,9 +61,9 @@ if __name__ == '__main__':
     episode2 = range(len(mean_reward_[1]))
     episode3 = range(len(mean_reward_[2]))
     episode = np.concatenate((episode1, episode2, episode3))
+    y = (sac, sac_cnn)
 
-    sns.lineplot(x=episode, y=mean_rewards)
-    # sns.lineplot(x=episode, y=rewards)
+    sns.lineplot(x=episode, y=sac_cnn)
     plt.xlabel("episode")
     plt.ylabel("mean_reward")
     plt.show()

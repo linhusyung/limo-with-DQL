@@ -65,25 +65,25 @@ class agent():
             param_target.data.copy_(param_target.data * (1.0 - self.tau) + param.data * self.tau)
 
     def replay_resize(self, replay):
-        state = torch.zeros(self.batch_size, 27).to(self.device)
-        # state_scan = torch.zeros(self.batch_size, 24).to(self.device)
-        # state = (state_img, state_scan)
+        state_img = torch.zeros(self.batch_size, 3, 100, 100).to(self.device)
+        state_scan = torch.zeros(self.batch_size, 24).to(self.device)
+        state = (state_img, state_scan)
 
-        next_state = torch.zeros(self.batch_size, 27).to(self.device)
-        # state_scan_next = torch.zeros(self.batch_size, 24).to(self.device)
-        # next_state = (state_img_next, state_scan_next)
+        state_img_next = torch.zeros(self.batch_size, 3, 100, 100).to(self.device)
+        state_scan_next = torch.zeros(self.batch_size, 24).to(self.device)
+        next_state = (state_img_next, state_scan_next)
 
         action = torch.zeros(self.batch_size, 2, dtype=torch.float32).to(self.device)
         reward = torch.zeros(self.batch_size, 1).to(self.device)
         done = torch.zeros(self.batch_size, 1, dtype=torch.float32).to(self.device)
         for _ in range(len(replay)):
-            # state[0][_] = replay[_]['state'][0]
-            # state[1][_] = replay[_]['state'][1]
-            state[_] = replay[_]['state']
+            state[0][_] = replay[_]['state'][0]
+            state[1][_] = replay[_]['state'][1]
+            # state[_] = replay[_]['state']
 
-            # next_state[0][_] = replay[_]['next_state'][0]
-            # next_state[1][_] = replay[_]['next_state'][1]
-            next_state[_] = replay[_]['next_state']
+            next_state[0][_] = replay[_]['next_state'][0]
+            next_state[1][_] = replay[_]['next_state'][1]
+            # next_state[_] = replay[_]['next_state']
 
             action[_] = a.np_to_tensor(replay[_]['action'])
 
@@ -137,7 +137,7 @@ class agent():
         self.soft_update(self.Q_net2, self.Q_net2_target)
 
     def save_variable(self, i_list, mean_reward, reward_list):
-        with open('result/sac_3.csv', 'w', newline='') as csvfile:
+        with open('result/sac_cnn.csv_2', 'w', newline='') as csvfile:
             # 建立 CSV 檔寫入器
             writer = csv.writer(csvfile)
 
@@ -145,6 +145,13 @@ class agent():
             writer.writerow(['玩的次数', i_list])
             writer.writerow(['平均奖励', mean_reward])
             writer.writerow(['奖励加总', reward_list])
+
+    def save_(self):
+        torch.save(self.actor.state_dict(), 'model/sac_cnn.pth')
+
+    def save_best(self):
+        print('储存最好的model')
+        torch.save(self.actor.state_dict(), 'model/model_best_cnn.pth')
 
 
 if __name__ == '__main__':
@@ -176,22 +183,23 @@ if __name__ == '__main__':
             print('第', action_index, '个动作')
             action_index += 1
             Target, scan_, pose, finish_pose, state_image = env.get_state()
-            # state = (a.image_tensor(state_image).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0))
-            state = torch.cat((a.data_to_tensor(Target).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0)), 1)
+            state = (a.image_tensor(state_image).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0))
+            # state = torch.cat((a.data_to_tensor(Target).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0)), 1)
             action, _ = a.actor(state)
 
             # print(Target)
             action = a.tensor_to_numpy(action.squeeze())
             print('action', action)
             next_Target, next_scan_, next_pose, next_finish_pose, reward, done, next_state_image = env.step(action)
-            next_state = torch.cat(
-                (a.data_to_tensor(next_Target).unsqueeze(0), a.data_to_tensor(next_scan_).unsqueeze(0)), 1)
+            # next_state = torch.cat(
+            #     (a.data_to_tensor(next_Target).unsqueeze(0), a.data_to_tensor(next_scan_).unsqueeze(0)), 1)
+            next_state = (a.image_tensor(next_state_image).unsqueeze(0), a.data_to_tensor(next_scan_).unsqueeze(0))
 
             # print(next_state.shape)
             episode_step += 1
             if episode_step == 200:
                 env.get_bummper = True
-                reward = -5
+                reward = -50
             print('reward=', reward)
             replay = a.Buffers.write_Buffers(state, next_state, reward, action, done)
             #
@@ -217,10 +225,10 @@ if __name__ == '__main__':
                 # if reward_list_[-1] == max(reward_list_):
                 #     a.save_best()
                 break
-
             rate.sleep()
+
     a.save_variable(b_list, reward_list_mean, reward_list_)
-    # a.save_()
+    a.save_()
     plt.plot(b_list, reward_list_mean)
     plt.show()
     l1, = plt.plot(b_list, reward_list_mean)

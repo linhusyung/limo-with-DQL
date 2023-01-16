@@ -6,10 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
+
 def weights_init_(m):
     if isinstance(m, nn.Linear):
         nn.init.xavier_uniform_(m.weight, gain=1)
         nn.init.constant_(m.bias, 0)
+
+
 class cnn(nn.Module):
     def __init__(self):
         super(cnn, self).__init__()
@@ -26,6 +29,7 @@ class cnn(nn.Module):
         self.fc3 = nn.Linear(128, 32)
         self.fc4 = nn.Linear(32, 16)
         self.fc5 = nn.Linear(16, 3)
+        self.apply(weights_init_)
 
     def forward(self, x):
         out = F.relu(self.conv1(x))
@@ -42,7 +46,7 @@ class cnn(nn.Module):
         out = F.relu(self.fc2(out))
         out = F.relu(self.fc3(out))
         out = F.relu(self.fc4(out))
-        out = self.fc5(out)
+        out = torch.sigmoid(self.fc5(out))
 
         return out
 
@@ -57,9 +61,9 @@ class critic_Linear(nn.Module):
 
         self.apply(weights_init_)
 
-    def forward(self, x, y):
-        # x_y_z = torch.cat((x, y, z), 1)
-        x_y_z = torch.cat((x, y), 1)
+    def forward(self, x, y, z):
+        x_y_z = torch.cat((x, y, z), 1)
+        # x_y_z = torch.cat((x, y), 1)
         out = F.relu(self.h1(x_y_z))
         out = F.relu(self.h2(out))
         out = F.relu(self.h3(out))
@@ -79,9 +83,10 @@ class Actor_Linear(nn.Module):
 
         self.apply(weights_init_)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    def forward(self, x):
-        # x_y_z = torch.cat((x, y), 1)
-        out = F.relu(self.h1(x))
+
+    def forward(self, x, y):
+        x_y_z = torch.cat((x, y), 1)
+        out = F.relu(self.h1(x_y_z))
         out = F.relu(self.h2(out))
         out = F.relu(self.h3(out))
 
@@ -113,27 +118,27 @@ class Actor_Linear(nn.Module):
 class Q_net(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Q_net, self).__init__()
-        # self.cnn = cnn()
+        self.cnn = cnn()
         self.Linear = critic_Linear(state_dim=state_dim, action_dim=action_dim)
 
     def forward(self, state: tuple, action):
-        # out_cnn = self.cnn(state[0])
-        # out = self.Linear(state[1], out_cnn, action)
-        out = self.Linear(state, action)
+        out_cnn = self.cnn(state[0])
+        out = self.Linear(state[1], out_cnn, action)
+        # out = self.Linear(state, action)
         return out
 
 
 class Actor_net(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Actor_net, self).__init__()
-        # self.cnn = cnn()
+        self.cnn = cnn()
         self.Linear = Actor_Linear(state_dim=state_dim, action_dim=action_dim)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def forward(self, state: tuple):
-        # out_cnn = self.cnn(state[0])
-        # mean, log_std = self.Linear(state[1], out_cnn)
-        action, log_std = self.Linear(state)
+        out_cnn = self.cnn(state[0])
+        action, log_std = self.Linear(state[1], out_cnn)
+        # action, log_std = self.Linear(state)
         log_std = torch.clamp(log_std, min=-20, max=2)
         return action, log_std
 
@@ -176,7 +181,7 @@ class Actor_net(nn.Module):
 
 class Replay_Buffers():
     def __init__(self, batch_size):
-        self.buffer_size = 100000
+        self.buffer_size = 10000
         self.buffer = deque([], maxlen=self.buffer_size)
         self.batch = batch_size
 
