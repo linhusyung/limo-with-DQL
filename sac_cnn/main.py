@@ -65,11 +65,11 @@ class agent():
             param_target.data.copy_(param_target.data * (1.0 - self.tau) + param.data * self.tau)
 
     def replay_resize(self, replay):
-        state = torch.zeros(self.batch_size, 27).to(self.device)
+        state = torch.zeros(self.batch_size, 25).to(self.device)
         # state_scan = torch.zeros(self.batch_size, 24).to(self.device)
         # state = (state_img, state_scan)
 
-        next_state = torch.zeros(self.batch_size, 27).to(self.device)
+        next_state = torch.zeros(self.batch_size, 25).to(self.device)
         # state_scan_next = torch.zeros(self.batch_size, 24).to(self.device)
         # next_state = (state_img_next, state_scan_next)
 
@@ -147,11 +147,11 @@ class agent():
             writer.writerow(['奖励加总', reward_list])
 
     def save_(self):
-        torch.save(self.actor.state_dict(), './model/model_params.pth')
+        torch.save(self.actor.state_dict(), './model/model_params_2.pth')
 
     def save_best(self):
         print('储存最好的model')
-        torch.save(self.actor.state_dict(), 'model/model_best_.pth')
+        torch.save(self.actor.state_dict(), 'model/model_best_2.pth')
 
 
 if __name__ == '__main__':
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     gamma = 0.99
     tau = 0.005
     num_action = 2
-    num_state = 24 + 3
+    num_state = 24 + 1
     b_list = []
     reward_list_ = []
     reward_list_mean = []
@@ -184,15 +184,15 @@ if __name__ == '__main__':
             action_index += 1
             Target, scan_, pose, finish_pose, state_image = env.get_state()
             # state = (a.image_tensor(state_image).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0))
-            state = torch.cat((a.data_to_tensor(Target).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0)), 1)
-            action, _ = a.actor(state)
+            state = torch.cat((a.data_to_tensor(Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0)), 1)
 
-            # print(Target)
+            action, _ = a.actor(state)
+            # # print(Target)
             action = a.tensor_to_numpy(action.squeeze())
             print('action', action)
             next_Target, next_scan_, next_pose, next_finish_pose, reward, done, next_state_image = env.step(action)
             next_state = torch.cat(
-                (a.data_to_tensor(next_Target).unsqueeze(0), a.data_to_tensor(next_scan_).unsqueeze(0)), 1)
+                (a.data_to_tensor(next_Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(next_scan_).unsqueeze(0)), 1)
 
             # print(next_state.shape)
             episode_step += 1

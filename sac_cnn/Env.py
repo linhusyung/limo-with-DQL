@@ -89,20 +89,66 @@ class environment():
         image = cv2.resize(self.cv_im, (100, 100))
         self.state_image = image
         mask = self.img_filter(image)
+
         a = np.where(mask == 255)
+        if len(a[0]) != 0:
+            x1 = np.argmin(a[1])
+            x2 = np.argmax(a[1])
+            middle = (a[1][x2] - a[1][x1]) // 2 + a[1][x1]
+            self.Target = middle
 
-        left = len(np.where(a[1] < 50)[0])
-        rigth = len(np.where(a[1] > 50)[0])
+            # cv2.circle(mask, (a[1][x1], a[0][x1]), 1, (255, 0, 255), 4)
+            # cv2.circle(mask, (a[1][x2], a[0][x2]), 1, (255, 0, 255), 4)
+            # cv2.circle(mask, (middle, a[0][x1]), 1, (255, 0, 255), 4)
 
-        self.Target = [0, 0, 0]
+        else:
+            self.Target = -1
 
-        if left > rigth:
-            self.Target = [1, 0, 0]
-        elif left < rigth:
-            self.Target = [0, 0, 1]
-        elif left != 0:
-            if rigth != 0:
-                self.Target = [0, 1, 0]
+        # cv2.imshow('img', mask)
+        # cv2.waitKey(1)
+
+    def find_x1y1(self, mask):
+        for _ in range(mask.shape[1]):
+            for __ in range(mask.shape[0]):
+                if mask[__][_] != 0:
+                    return _, __
+
+    def find_x2y2(self, mask):
+        for _ in range(mask.shape[1] - 1, -1, -1):
+            for __ in range(mask.shape[0] - 1, -1, -1):
+                if mask[__][_] != 0:
+                    return _, __
+
+    def yolo_bbox_midpoint(self, im_x, midpoint):
+        if midpoint <= im_x.shape[1] // 3:
+            return [1, 0, 0]
+        if midpoint > im_x.shape[1] // 3 and midpoint <= im_x.shape[1] // 3 * 2:
+            return [0, 1, 0]
+        else:
+            return [0, 0, 1]
+
+    # def get_image(self, image):
+    #     """
+    #     监听摄影机数据并转换为目标点在左边还是右边
+    #     """
+    #     self.cv_im = self.bridge.imgmsg_to_cv2(image, 'bgr8')
+    #     image = cv2.resize(self.cv_im, (100, 100))
+    #     self.state_image = image
+    #     mask = self.img_filter(image)
+    #     a = np.where(mask == 255)
+    #     if len(a[0]) != 0:
+    #         x1, y1 = self.find_x1y1(mask)
+    #         x2, y2 = self.find_x2y2(mask)
+    #         middle = (x2 - x1) // 2 + x1
+    #         self.Target = middle
+    #         # cv2.circle(mask, (x1, y1), 1, (255, 0, 255), 4)
+    #         # cv2.circle(mask, (x2, y2), 1, (255, 0, 255), 4)
+    #         # cv2.circle(mask, (middle, y2), 1, (255, 0, 255), 4)
+    #
+    #     else:
+    #         self.Target = -1
+    #     # cv2.imshow('img', mask)
+    #     # cv2.waitKey(1)
 
     def img_filter(self, img):
         '''
@@ -117,7 +163,7 @@ class environment():
         mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
         mask = mask1 + mask2
 
-        # cv2.imshow('img', img)
+        # cv2.imshow('img', mask)
         # cv2.waitKey(1)
         return mask
 
@@ -207,7 +253,6 @@ class environment():
         next_Target, next_scan_, next_pose, next_finish_pose, state_image = self.get_state()
         done = self.set_done()
         reward = self.set_reward()
-
 
         return next_Target, next_scan_, next_pose, next_finish_pose, reward, done, state_image
 

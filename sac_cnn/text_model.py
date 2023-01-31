@@ -36,10 +36,10 @@ if __name__ == '__main__':
     rospy.init_node('text_listener', anonymous=True)
     rate = rospy.Rate(50)
     num_action = 2
-    num_state = 24 + 3
-    path='model/model_params.pth'
-    # path='model/model_best_.pth'
-    a = agent(num_state, num_action,path)
+    num_state = 24 + 1
+    path = 'model/model_params_2.pth'
+    # path='model/model_best_1.pth'
+    a = agent(num_state, num_action, path)
     env = environment()
 
     for i in range(10):
@@ -48,15 +48,16 @@ if __name__ == '__main__':
             print('第', action_index, '个动作')
             action_index += 1
             Target, scan_, pose, finish_pose, state_image = env.get_state()
-
-            state = torch.cat((a.data_to_tensor(Target).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0)), 1)
+            print(Target)
+            state = torch.cat((a.data_to_tensor(Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0)), 1)
             action, _ = a.actor(state)
+            print(action)
 
             # print(Target)
             action = a.tensor_to_numpy(action.squeeze())
-            print('action', action)
+            # print('action', action)
             next_Target, next_scan_, next_pose, next_finish_pose, reward, done, next_state_image = env.step(action)
-            print('reward', reward)
+            # print('reward', reward)
             rate.sleep()
 
             if env.get_goalbox:
