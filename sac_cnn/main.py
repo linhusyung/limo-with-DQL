@@ -25,6 +25,7 @@ class agent():
         self.Q_net2_target.load_state_dict(self.Q_net2_target.state_dict())
 
         self.actor = Actor_net(num_state, num_action).to(self.device)
+        # self.actor.load_state_dict(torch.load(imitate_path))
 
         self.batch_size = 64
         self.Buffers = Replay_Buffers(self.batch_size)
@@ -147,11 +148,7 @@ class agent():
             writer.writerow(['奖励加总', reward_list])
 
     def save_(self):
-        torch.save(self.actor.state_dict(), './model/model_params_2.pth')
-
-    def save_best(self):
-        print('储存最好的model')
-        torch.save(self.actor.state_dict(), 'model/model_best_2.pth')
+        torch.save(self.actor.state_dict(), './model/sac_model/model_params_2_3.pth')
 
 
 if __name__ == '__main__':
@@ -162,15 +159,19 @@ if __name__ == '__main__':
     gamma = 0.99
     tau = 0.005
     num_action = 2
-    num_state = 24 + 1
+    num_state = 25
     b_list = []
     reward_list_ = []
     reward_list_mean = []
+    # imitate_path = 'data/imitate_model/model_1.pth'
 
     rospy.init_node('text_listener', anonymous=True)
     rate = rospy.Rate(50)
     a = agent(num_state, num_action, q_lr, pi_lr, target_entropy, gamma, tau, alpha_lr)
     env = environment()
+
+    done_frequency = 0
+    chage_rew = True
 
     for i in range(1000):
         reward_list = []
@@ -184,15 +185,24 @@ if __name__ == '__main__':
             action_index += 1
             Target, scan_, pose, finish_pose, state_image = env.get_state()
             # state = (a.image_tensor(state_image).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0))
-            state = torch.cat((a.data_to_tensor(Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0)), 1)
+            re_data = []
+            for _ in range(24):
+                re_data.append(scan_[_ * (len(scan_) // 24)])
+            state = torch.cat(
+                (a.data_to_tensor(Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(re_data).unsqueeze(0)), 1)
 
             action, _ = a.actor(state)
-            # # print(Target)
             action = a.tensor_to_numpy(action.squeeze())
             print('action', action)
-            next_Target, next_scan_, next_pose, next_finish_pose, reward, done, next_state_image = env.step(action)
+            # if done_frequency >= 10:
+            #     chage_rew = False
+            next_Target, next_scan_, next_pose, next_finish_pose, reward, done, next_state_image = env.step(action,
+                                                                                                            True)
+            re_data_next = []
+            for _ in range(24):
+                re_data_next.append(next_scan_[_ * (len(next_scan_) // 24)])
             next_state = torch.cat(
-                (a.data_to_tensor(next_Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(next_scan_).unsqueeze(0)), 1)
+                (a.data_to_tensor(next_Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(re_data_next).unsqueeze(0)), 1)
 
             # print(next_state.shape)
             episode_step += 1
@@ -212,8 +222,9 @@ if __name__ == '__main__':
                 print('reward_list', sum(reward_list))
                 reward_list_.append(sum(reward_list))
                 reward_list_mean.append(np.mean(reward_list_))
-                if reward_list_[-1] == max(reward_list_):
-                    a.save_best()
+                done_frequency += 1
+                # if reward_list_[-1] == max(reward_list_):
+                #     a.save_best()
                 break
 
             if env.get_bummper:
@@ -221,11 +232,13 @@ if __name__ == '__main__':
                 print('reward_list', sum(reward_list))
                 reward_list_.append(sum(reward_list))
                 reward_list_mean.append(np.mean(reward_list_))
-                if reward_list_[-1] == max(reward_list_):
-                    a.save_best()
+                done_frequency = 0
+                # if reward_list_[-1] == max(reward_list_):
+                #     a.save_best()
                 break
 
             rate.sleep()
+
     a.save_variable(b_list, reward_list_mean, reward_list_)
     a.save_()
     plt.plot(b_list, reward_list_mean)

@@ -13,7 +13,8 @@ import math
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from nav_msgs.msg import Odometry
 import time
-
+from collections import deque
+np.random.seed(99)
 
 class environment():
     def __init__(self):
@@ -29,6 +30,7 @@ class environment():
         # self.state_image = np.zeros((100, 100))
         im = self.bridge.imgmsg_to_cv2(rospy.wait_for_message('/limo/color/image_raw', Image), 'bgr8')
         self.state_image = cv2.resize(im, (100, 100))
+        self.action_buffer = deque([], maxlen=2)
 
     def init_word(self):
         '''
@@ -66,7 +68,7 @@ class environment():
         orientation = odom.pose.pose.orientation
         orientation_list = [orientation.x, orientation.y, orientation.z, orientation.w]
         _, _, yaw = euler_from_quaternion(orientation_list)
-
+        self.yaw = yaw
         goal_angle = math.atan2(self.finish_pose[1] - self.position.y, self.finish_pose[0] - self.position.x)
 
         heading = goal_angle - yaw
@@ -91,6 +93,7 @@ class environment():
         mask = self.img_filter(image)
 
         a = np.where(mask == 255)
+        self.c = len(a[0])
         if len(a[0]) != 0:
             x1 = np.argmin(a[1])
             x2 = np.argmax(a[1])
@@ -230,29 +233,51 @@ class environment():
         reward = (1 / finish_distance) - abs(self.heading)
 
         if self.get_bummper:
-            reward = -5
+            reward = -50
             return reward
         if self.get_goalbox:
-            reward = 10
+            reward = 50
             return reward
         return reward
 
     def perform_action(self, action):
         '''
         连续动作空间
-        v=[0~0.5]
-        W=[-2.5~0.22]
+        v=[0~0.22]
+        W=[-2.5~2.5]
         action=(w,v)
         '''
         self.msg.linear.x = float(action[1])
         self.msg.angular.z = float(action[0])
         self.pub.publish(self.msg)
 
-    def step(self, action):
-        self.perform_action(action)
+    def chage_reward(self, action):
+        self.action_buffer.append(action)
+        if self.c != 0:
+            try:
+                reward = -abs(self.action_buffer[0][0] - self.action_buffer[1][0])
+            except:
+                reward = 0
+        else:
+            reward = 0
+
+        if self.get_bummper:
+            reward = -50
+            return reward
+        if self.get_goalbox:
+            reward = 50
+            return reward
+        return reward
+
+    def step(self, action, chage_rew):
+        # self.perform_action(action)
         next_Target, next_scan_, next_pose, next_finish_pose, state_image = self.get_state()
         done = self.set_done()
-        reward = self.set_reward()
+        if chage_rew:
+            reward = self.set_reward()
+            # print('没改变')
+        else:
+            reward = np.float(self.chage_reward(action))
 
         return next_Target, next_scan_, next_pose, next_finish_pose, reward, done, state_image
 
