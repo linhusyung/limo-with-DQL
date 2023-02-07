@@ -12,7 +12,7 @@ import time
 
 
 class agent():
-    def __init__(self, num_state, num_action, q_lr, pi_lr, target_entropy, gamma, tau, alpha_lr):
+    def __init__(self, num_state, num_action, q_lr, pi_lr, target_entropy, gamma, tau, alpha_lr, imitate_path):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.Q_net1 = Q_net(num_state, num_action).to(self.device)
@@ -25,7 +25,7 @@ class agent():
         self.Q_net2_target.load_state_dict(self.Q_net2_target.state_dict())
 
         self.actor = Actor_net(num_state, num_action).to(self.device)
-        # self.actor.load_state_dict(torch.load(imitate_path))
+        self.actor.load_state_dict(torch.load(imitate_path))
 
         self.batch_size = 64
         self.Buffers = Replay_Buffers(self.batch_size)
@@ -35,7 +35,7 @@ class agent():
         self.q2_optimizer = optim.Adam(self.Q_net2.parameters(), lr=q_lr)
         self.policy_optimizer = optim.Adam(self.actor.parameters(), lr=pi_lr)
 
-        self.log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
+        self.log_alpha = torch.tensor(np.log(0.05), dtype=torch.float)
         self.log_alpha.requires_grad = True
         self.log_alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
 
@@ -138,7 +138,7 @@ class agent():
         self.soft_update(self.Q_net2, self.Q_net2_target)
 
     def save_variable(self, i_list, mean_reward, reward_list):
-        with open('result/sac_3.csv', 'w', newline='') as csvfile:
+        with open('result/imitate.csv', 'w', newline='') as csvfile:
             # 建立 CSV 檔寫入器
             writer = csv.writer(csvfile)
 
@@ -148,7 +148,7 @@ class agent():
             writer.writerow(['奖励加总', reward_list])
 
     def save_(self):
-        torch.save(self.actor.state_dict(), './model/sac_model/model_params_2_3.pth')
+        torch.save(self.actor.state_dict(), './result/2_3/imitate_model.pth')
 
 
 if __name__ == '__main__':
@@ -163,11 +163,11 @@ if __name__ == '__main__':
     b_list = []
     reward_list_ = []
     reward_list_mean = []
-    # imitate_path = 'data/imitate_model/model_1.pth'
+    imitate_path = 'model/sac_model_pre/pre_imitate.pth'
 
     rospy.init_node('text_listener', anonymous=True)
     rate = rospy.Rate(50)
-    a = agent(num_state, num_action, q_lr, pi_lr, target_entropy, gamma, tau, alpha_lr)
+    a = agent(num_state, num_action, q_lr, pi_lr, target_entropy, gamma, tau, alpha_lr, imitate_path)
     env = environment()
 
     done_frequency = 0
@@ -202,7 +202,8 @@ if __name__ == '__main__':
             for _ in range(24):
                 re_data_next.append(next_scan_[_ * (len(next_scan_) // 24)])
             next_state = torch.cat(
-                (a.data_to_tensor(next_Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(re_data_next).unsqueeze(0)), 1)
+                (a.data_to_tensor(next_Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(re_data_next).unsqueeze(0)),
+                1)
 
             # print(next_state.shape)
             episode_step += 1

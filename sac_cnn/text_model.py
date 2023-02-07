@@ -34,7 +34,7 @@ class agent():
 
 
 def save_variable(i_list, mean_reward, reward_list):
-    with open('result/2_3/sac_test.csv', 'w', newline='') as csvfile:
+    with open('result/2_3/sac_imitate_test.csv', 'w', newline='') as csvfile:
         # 建立 CSV 檔寫入器
         writer = csv.writer(csvfile)
 
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     rate = rospy.Rate(50)
     num_action = 2
     num_state = 25
-    path = 'model/sac_model/model_params_2_3.pth'
+    path = 'result/2_3/imitate_model.pth'
     # fine_tuning_model_path='result/2_3/model_params_fine_tuning.pth'
     a = agent(num_state, num_action, path)
     env = environment()
@@ -61,6 +61,7 @@ if __name__ == '__main__':
         action_index = 0
         reward_list = []
         episode_step = 0
+        print('第',i,'次')
         while True:
             print('第', action_index, '个动作')
             action_index += 1

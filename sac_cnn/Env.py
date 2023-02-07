@@ -270,7 +270,7 @@ class environment():
         return reward
 
     def step(self, action, chage_rew):
-        # self.perform_action(action)
+        self.perform_action(action)
         next_Target, next_scan_, next_pose, next_finish_pose, state_image = self.get_state()
         done = self.set_done()
         if chage_rew:

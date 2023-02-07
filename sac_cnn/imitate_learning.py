@@ -32,8 +32,7 @@ class My_dataset(Dataset):
 
 
 class imitate_learning():
-    def __init__(self, image_path, scan_path, target_path, image_test_path, scan_test_path, target_test_path,
-                 model_path):
+    def __init__(self, image_path, scan_path, target_path, image_test_path, scan_test_path, target_test_path):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.my = My_dataset(image_path, scan_path, target_path)
         self.train_loader = DataLoader(dataset=self.my, batch_size=8, shuffle=True)
@@ -42,7 +41,7 @@ class imitate_learning():
         self.test_loader = DataLoader(dataset=self.test, batch_size=1, shuffle=False)
 
         self.actor = Actor_net(25, 2).to(self.device)
-        self.actor.load_state_dict(torch.load(model_path))
+        # self.actor.load_state_dict(torch.load(model_path))
 
         self.loss = nn.MSELoss()
         self.optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
@@ -74,7 +73,7 @@ class imitate_learning():
         print('loss_test_avg:', loss_test_avg)
 
     def save_(self):
-        torch.save(self.actor.state_dict(), './result/2_3/model_params_fine_tuning.pth')
+        torch.save(self.actor.state_dict(), './result/2_3/pre_imitate.pth')
 
     def step(self):
         for epoch in range(self.epoch):
@@ -93,9 +92,8 @@ if __name__ == '__main__':
     scan_test_path = './data/scan_test/'
     target_test_path = './data/target_test/'
 
-    model_path = 'model/sac_model/model_params_2_3.pth'
+    # model_path = 'model/sac_model/model_params_2_3.pth'
 
-    imitate = imitate_learning(image_path, scan_path, target_path, image_test_path, scan_test_path, target_test_path,
-                               model_path)
+    imitate = imitate_learning(image_path, scan_path, target_path, image_test_path, scan_test_path, target_test_path)
     imitate.step()
     # imitate.test_()
