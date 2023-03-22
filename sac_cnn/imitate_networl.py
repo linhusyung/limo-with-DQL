@@ -42,6 +42,7 @@ class Actor_Linear(nn.Module):
 
         action = torch.zeros(normal_sample.shape[0], 2).to(self.device)
         action[:, 0] = torch.tanh(mean[:, 0])
+        # action[:, 1] = torch.tanh(mean[:, 1])
         action[:, 1] = torch.sigmoid(mean[:, 1])
 
         # 计算tanh_normal分布的对数概率密度

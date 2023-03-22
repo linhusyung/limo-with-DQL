@@ -29,7 +29,6 @@ class cnn(nn.Module):
         self.fc3 = nn.Linear(128, 32)
         self.fc4 = nn.Linear(32, 16)
         self.fc5 = nn.Linear(16, 3)
-        self.apply(weights_init_)
 
     def forward(self, x):
         out = F.relu(self.conv1(x))
@@ -46,14 +45,14 @@ class cnn(nn.Module):
         out = F.relu(self.fc2(out))
         out = F.relu(self.fc3(out))
         out = F.relu(self.fc4(out))
-        out = torch.sigmoid(self.fc5(out))
+        out = self.fc5(out)
 
         return out
 
 
-class critic_Linear(nn.Module):
+class critic_Linear_1(nn.Module):
     def __init__(self, state_dim, action_dim):
-        super(critic_Linear, self).__init__()
+        super(critic_Linear_1, self).__init__()
         self.h1 = nn.Linear(state_dim + action_dim, 512)
         self.h2 = nn.Linear(512, 256)
         self.h3 = nn.Linear(256, 64)
@@ -61,9 +60,9 @@ class critic_Linear(nn.Module):
 
         self.apply(weights_init_)
 
-    def forward(self, x, y, z):
-        x_y_z = torch.cat((x, y, z), 1)
-        # x_y_z = torch.cat((x, y), 1)
+    def forward(self, x, y):
+        # x_y_z = torch.cat((x, y, z), 1)
+        x_y_z = torch.cat((x, y), 1)
         out = F.relu(self.h1(x_y_z))
         out = F.relu(self.h2(out))
         out = F.relu(self.h3(out))
@@ -71,9 +70,9 @@ class critic_Linear(nn.Module):
         return out
 
 
-class Actor_Linear(nn.Module):
+class Actor_Linear_1(nn.Module):
     def __init__(self, state_dim, action_dim):
-        super(Actor_Linear, self).__init__()
+        super(Actor_Linear_1, self).__init__()
         self.h1 = nn.Linear(state_dim, 512)
         self.h2 = nn.Linear(512, 256)
         self.h3 = nn.Linear(256, 64)
@@ -84,9 +83,12 @@ class Actor_Linear(nn.Module):
         self.apply(weights_init_)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def forward(self, x, y):
-        x_y_z = torch.cat((x, y), 1)
-        out = F.relu(self.h1(x_y_z))
+    def forward(self, x, epsilon=1e-6):
+        # action, _ = a.actor(state)
+        out = F.relu(self.h1(x))
+        # if x.shape[0] == 1:
+        #     print(x)
+        #     print(out)
         out = F.relu(self.h2(out))
         out = F.relu(self.h3(out))
 
@@ -94,21 +96,20 @@ class Actor_Linear(nn.Module):
         log_std = self.std(out)
 
         std = F.softplus(log_std)
+
         dist = Normal(mean, std)
 
         normal_sample = dist.rsample()  # 在标准化正态分布上采样
-        log_prob = dist.log_prob(normal_sample)  # 计算该值的标准正太分布上的概率
+        log_prob_ = dist.log_prob(normal_sample)  # 计算该值的标准正太分布上的概率
 
         # action = torch.tanh(normal_sample)  # 对数值进行tanh
 
         action = torch.zeros(normal_sample.shape[0], 2).to(self.device)
         action[:, 0] = torch.tanh(mean[:, 0])
-        action[:, 1] = torch.sigmoid(mean[:, 1])
+        action[:, 1] = torch.tanh(mean[:, 1])
 
         # 计算tanh_normal分布的对数概率密度
-        log_prob = log_prob - torch.log(1 - torch.tanh(action).pow(2) + 1e-7)  # 为了提升目标对应的概率值
-        # log_prob = log_prob - torch.log(1 - torch.tanh(action).pow(2) + 1e-7)  # 为了提升目标对应的概率值
-        # action = action * 2  # 对action求取范围
+        log_prob = log_prob_ - torch.log(1 - torch.tanh(action).pow(2) + 1e-7)  # 为了提升目标对应的概率值
 
         action[:, 0] = action[:, 0] * 2.5
         action[:, 1] = action[:, 1] * 0.22
@@ -116,30 +117,30 @@ class Actor_Linear(nn.Module):
         return action, log_prob
 
 
-class Q_net(nn.Module):
+class Q_net_1(nn.Module):
     def __init__(self, state_dim, action_dim):
-        super(Q_net, self).__init__()
-        self.cnn = cnn()
-        self.Linear = critic_Linear(state_dim=state_dim, action_dim=action_dim)
+        super(Q_net_1, self).__init__()
+        # self.cnn = cnn()
+        self.Linear = critic_Linear_1(state_dim=state_dim, action_dim=action_dim)
 
     def forward(self, state: tuple, action):
-        out_cnn = self.cnn(state[0])
-        out = self.Linear(state[1], out_cnn, action)
-        # out = self.Linear(state, action)
+        # out_cnn = self.cnn(state[0])
+        # out = self.Linear(state[1], out_cnn, action)
+        out = self.Linear(state, action)
         return out
 
 
-class Actor_net(nn.Module):
+class Actor_net_1(nn.Module):
     def __init__(self, state_dim, action_dim):
-        super(Actor_net, self).__init__()
-        self.cnn = cnn()
-        self.Linear = Actor_Linear(state_dim=state_dim, action_dim=action_dim)
+        super(Actor_net_1, self).__init__()
+        # self.cnn = cnn()
+        self.Linear = Actor_Linear_1(state_dim=state_dim, action_dim=action_dim)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def forward(self, state: tuple):
-        out_cnn = self.cnn(state[0])
-        action, log_std = self.Linear(state[1], out_cnn)
-        # action, log_std = self.Linear(state)
+        # out_cnn = self.cnn(state[0])
+        # mean, log_std = self.Linear(state[1], out_cnn)
+        action, log_std = self.Linear(state)
         log_std = torch.clamp(log_std, min=-20, max=2)
         return action, log_std
 
@@ -152,7 +153,7 @@ class Actor_net(nn.Module):
 
         action = torch.zeros(x_t.shape[0], 2).to(self.device)
         action[:, 0] = torch.tanh(mean[:, 0])
-        action[:, 1] = torch.sigmoid(mean[:, 1])
+        action[:, 1] = torch.tanh(mean[:, 1])
 
         log_prob = normal.log_prob(x_t) - torch.log(1 - action.pow(2) + epsilon)
 
@@ -161,28 +162,10 @@ class Actor_net(nn.Module):
 
         return action, log_prob
 
-    def get_action(self, state):
-        mean, log_std = self.forward(state)
-
-        std = log_std.exp()
-        print('log_std, mean', log_std, mean)
-        # std = abs(log_std)
-        normal = Normal(mean, std)
-        x_t = normal.rsample()
-
-        action = torch.zeros(x_t.shape[0], 2).to(self.device)
-        action[:, 0] = torch.tanh(x_t[:, 0])
-        action[:, 1] = torch.sigmoid(x_t[:, 1])
-
-        action[:, 0] = action[:, 0] * 2.5
-        action[:, 1] = action[:, 1] * 0.22
-
-        return action
-
 
 class Replay_Buffers():
     def __init__(self, batch_size):
-        self.buffer_size = 10000
+        self.buffer_size = 100000
         self.buffer = deque([], maxlen=self.buffer_size)
         self.batch = batch_size
 

@@ -47,7 +47,7 @@ class reset():
         while True:
             try:
                 remove_model_proxy = rospy.ServiceProxy('/gazebo/delete_model', DeleteModel)
-                remove_model_proxy("model_1")
+                remove_model_proxy("model_c")
                 break
                 # remove_model_proxy("some_robo_name")
             except:
@@ -74,4 +74,4 @@ class reset():
         sdff = f.read()
         rospy.wait_for_service('gazebo/spawn_sdf_model')
         spawn_model_prox = rospy.ServiceProxy('gazebo/spawn_sdf_model', SpawnModel)
-        spawn_model_prox("model_1", sdff, "robotos_name_space", initial_pose, "world")
+        spawn_model_prox("model_c", sdff, "robotos_name_space", initial_pose, "world")

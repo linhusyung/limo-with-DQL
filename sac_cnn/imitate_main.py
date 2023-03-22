@@ -138,7 +138,7 @@ class agent():
         self.soft_update(self.Q_net2, self.Q_net2_target)
 
     def save_variable(self, i_list, mean_reward, reward_list):
-        with open('result/imitate.csv', 'w', newline='') as csvfile:
+        with open('result/imitate_1.csv', 'w', newline='') as csvfile:
             # 建立 CSV 檔寫入器
             writer = csv.writer(csvfile)
 
@@ -148,7 +148,7 @@ class agent():
             writer.writerow(['奖励加总', reward_list])
 
     def save_(self):
-        torch.save(self.actor.state_dict(), './result/2_3/imitate_model.pth')
+        torch.save(self.actor.state_dict(), './model/sac_imitate/imitate_model_1.pth')
 
 
 if __name__ == '__main__':

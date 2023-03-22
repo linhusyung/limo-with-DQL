@@ -14,7 +14,10 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from nav_msgs.msg import Odometry
 import time
 from collections import deque
-np.random.seed(99)
+
+
+# np.random.seed(99)
+
 
 class environment():
     def __init__(self):
@@ -38,8 +41,19 @@ class environment():
         '''
         self.reset.delet_model()
         self.reset.reset_and_stop()
-        x = np.random.randint(-1, 1.3)
-        y = np.random.randint(-0.3, 2.3)
+        # x = np.random.randint(-1, 1.3)
+        # y = np.random.randint(-0.3, 2.3)
+
+        x = 0
+        y = 1
+
+        # x_ = [0, 2, 4]
+        # # y_ = [1, 0, -1, -2, -3]
+        # y_ = [-1]
+        # #
+        # x = np.random.choice(x_)
+        # y = np.random.choice(y_)
+
         self.reset.SpawnModel(x, y)
         rospy.set_param('/done', 0)
         self.finish_pose = (x, y)
@@ -51,12 +65,21 @@ class environment():
         self.reset.stop()
         self.reset.delet_model()
         while True:
-            x = np.random.randint(-2, 1.3)
-            y = np.random.randint(-0.3, 2.3)
+            # x = np.random.randint(-2, 1.3)
+            # y = np.random.randint(-0.3, 2.3)
+            x = 0
+            y = 1
+
+            # x_ = [0, 2, 4]
+            # y_ = [1, 0, -1, -2, -3]
+            #
+            # x = np.random.choice(x_)
+            # y = np.random.choice(y_)
+
             self.finish_pose = (x, y)
             current_distance = round(math.hypot(self.finish_pose[0] - self.pose[0],
                                                 self.finish_pose[1] - self.pose[1]), 2)
-            if current_distance > 0.5:
+            if current_distance > 0.3:
                 break
         self.reset.SpawnModel(x, y)
 
@@ -81,7 +104,15 @@ class environment():
         self.heading = round(heading, 1)
 
     def get_pose(self, pose):
-        self.pose = (round(pose.pose[2].position.x, 1), round(pose.pose[2].position.y, 1))
+        '''
+        静态正方地图
+        '''
+        # self.pose = (round(pose.pose[2].position.x, 1), round(pose.pose[2].position.y, 1))
+        '''
+        动态地图 
+        '''
+        self.pose = (round(pose.pose[-2].position.x, 1), round(pose.pose[-2].position.y, 1))
+        # print('pose',self.pose)
 
     def get_image(self, image):
         """
@@ -100,9 +131,9 @@ class environment():
             middle = (a[1][x2] - a[1][x1]) // 2 + a[1][x1]
             self.Target = middle
 
-            # cv2.circle(mask, (a[1][x1], a[0][x1]), 1, (255, 0, 255), 4)
-            # cv2.circle(mask, (a[1][x2], a[0][x2]), 1, (255, 0, 255), 4)
-            # cv2.circle(mask, (middle, a[0][x1]), 1, (255, 0, 255), 4)
+            cv2.circle(mask, (a[1][x1], a[0][x1]), 1, (255, 0, 255), 4)
+            cv2.circle(mask, (a[1][x2], a[0][x2]), 1, (255, 0, 255), 4)
+            cv2.circle(mask, (middle, a[0][x1]), 1, (255, 0, 255), 4)
 
         else:
             self.Target = -1
@@ -166,8 +197,8 @@ class environment():
         mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
         mask = mask1 + mask2
 
-        # cv2.imshow('img', mask)
-        # cv2.waitKey(1)
+        # cv2.imshow('img', img)
+        # cv2.waitKey(0)
         return mask
 
     def get_state(self):
@@ -188,12 +219,13 @@ class environment():
             try:
                 self.scan = rospy.wait_for_message('/limo/scan', LaserScan)
                 self.scan_ = np.array(self.scan.ranges)
-                self.scan_[np.isinf(self.scan_)] = 12
+                self.scan_[np.isinf(self.scan_)] = -1
             except:
                 pass
 
-        # return self.Target, self.scan_ / 8, self.pose, self.finish_pose, self.state_image
-        return self.Target, self.scan_ / 12, self.pose, self.finish_pose, self.state_image
+        # return self.Target, self.scan_ / 12, self.pose, self.finish_pose, self.state_image
+        finish_distance = sum(np.abs(np.array(self.pose) - np.array(self.finish_pose)))
+        return self.Target, self.scan_ / 12, self.pose, self.finish_pose, self.heading, finish_distance
 
     def set_done(self):
         '''
@@ -206,35 +238,54 @@ class environment():
         self.get_goalbox = False
         current_distance = round(math.hypot(self.finish_pose[0] - self.pose[0],
                                             self.finish_pose[1] - self.pose[1]), 2)
+        # print('current_distance',current_distance)
+        # print(self.finish_pose, self.pose)
         if current_distance < 0.3:
+            self.get_goalbox = True
+            done = 1
+        if self.pose[0] > 7:
             self.get_goalbox = True
             done = 1
         return done
 
-    def set_reward(self):
+    def set_reward(self, action):
         '''
         设置reward
         '''
         # 距离奖励
         finish_distance = math.dist(self.pose, self.finish_pose)
+        # finish_distance = sum(np.abs(np.array(self.pose) - np.array(self.finish_pose)))
         # distance_reward = -finish_distance
         # 角度奖励
         # angle_reward = -1.5 * abs(self.heading)
 
         # 距离障碍物距离
         # scan_reward = min(self.scan_) * 5
-        # scan_reward = 0
-        # if min(self.scan_) < 1:
-        #     scan_reward = -5
-        #     if min(self.scan_) < 0.5:
-        #         scan_reward = -10
+        scan_reward = 0
+        if min(self.scan_) < 0.2:
+            print('1')
+            scan_reward = -1
+            if min(self.scan_) < 0.15:
+                print('2')
+                scan_reward = -2
 
         # reward = distance_reward + angle_reward + scan_reward
-        reward = (1 / finish_distance) - abs(self.heading)
+        reward = (1 / finish_distance) - abs(self.heading) + scan_reward + action[1]
+        # reward = (1 / finish_distance) - abs(self.heading) + scan_reward
+        # dis = abs(7 - self.pose[0])
+        # reward = scan_reward + action[1] - dis
+        # + 10 * 1 / (dis + 1)
+        # if action[1] < 1:
+        #     reward = scan_reward - 0.1
 
         if self.get_bummper:
             reward = -50
-            return reward
+            # return reward
+            # if self.pose[0] > 2:
+            #     reward = -300
+            # if self.pose[0] > 4:
+            #     reward = -200
+
         if self.get_goalbox:
             reward = 50
             return reward
@@ -270,16 +321,20 @@ class environment():
         return reward
 
     def step(self, action, chage_rew):
-        self.perform_action(action)
-        next_Target, next_scan_, next_pose, next_finish_pose, state_image = self.get_state()
+        # self.perform_action(action)
+        next_Target, next_scan_, next_pose, next_finish_pose, heading, finish_distance = self.get_state()
         done = self.set_done()
-        if chage_rew:
-            reward = self.set_reward()
-            # print('没改变')
-        else:
-            reward = np.float(self.chage_reward(action))
+        reward = self.set_reward(action)
 
-        return next_Target, next_scan_, next_pose, next_finish_pose, reward, done, state_image
+        return next_Target, next_scan_, next_pose, next_finish_pose, reward, done, heading, finish_distance
+
+    def text_step(self):
+
+        next_Target, next_scan_, next_pose, next_finish_pose, heading = self.get_state()
+        done = self.set_done()
+        reward = self.set_reward()
+
+        return next_Target, next_scan_, next_pose, next_finish_pose, reward, done, heading
 
 # if __name__ == '__main__':
 #     rospy.init_node('text_listener', anonymous=True)

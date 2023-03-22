@@ -12,7 +12,7 @@ import time
 
 
 class agent():
-    def __init__(self, num_state, num_action, q_lr, pi_lr, target_entropy, gamma, tau, alpha_lr):
+    def __init__(self, num_state, num_action, q_lr, pi_lr, target_entropy, gamma, tau, alpha_lr, imitate_path):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.Q_net1 = Q_net(num_state, num_action).to(self.device)
@@ -36,6 +36,7 @@ class agent():
         self.policy_optimizer = optim.Adam(self.actor.parameters(), lr=pi_lr)
 
         self.log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
+        # self.log_alpha = torch.tensor(np.log(0.05), dtype=torch.float)
         self.log_alpha.requires_grad = True
         self.log_alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
 
@@ -65,12 +66,12 @@ class agent():
         for param_target, param in zip(target_net.parameters(), net.parameters()):
             param_target.data.copy_(param_target.data * (1.0 - self.tau) + param.data * self.tau)
 
-    def replay_resize(self, replay):
-        state = torch.zeros(self.batch_size, 25).to(self.device)
+    def replay_resize(self, replay, scan_num):
+        state = torch.zeros(self.batch_size, scan_num + 1).to(self.device)
         # state_scan = torch.zeros(self.batch_size, 24).to(self.device)
         # state = (state_img, state_scan)
 
-        next_state = torch.zeros(self.batch_size, 25).to(self.device)
+        next_state = torch.zeros(self.batch_size, scan_num + 1).to(self.device)
         # state_scan_next = torch.zeros(self.batch_size, 24).to(self.device)
         # next_state = (state_img_next, state_scan_next)
 
@@ -94,9 +95,9 @@ class agent():
 
         return state, next_state, action, reward, done
 
-    def train(self, replay):
+    def train(self, replay, scan_num):
         print('train')
-        state, next_state, action, reward, done = self.replay_resize(replay)
+        state, next_state, action, reward, done = self.replay_resize(replay, scan_num)
         action_next, log_prob = a.actor.sample(next_state)
 
         entropy = -log_prob
@@ -123,9 +124,13 @@ class agent():
         q1_value = self.Q_net1(state, new_actions)
         q2_value = self.Q_net2(state, new_actions)
         actor_loss = torch.mean(-self.log_alpha.exp() * entropy - torch.min(q1_value, q2_value))
+        # print(actor_loss)
         self.policy_optimizer.zero_grad()
         actor_loss.backward()
         self.policy_optimizer.step()
+        # for name, parms in self.actor.named_parameters():
+        #     print('-->name:', name, '-->grad_requirs:', parms.requires_grad,
+        #           ' -->grad_value:', parms.grad)
 
         # 更新alpha值
         alpha_loss = torch.mean(
@@ -138,7 +143,7 @@ class agent():
         self.soft_update(self.Q_net2, self.Q_net2_target)
 
     def save_variable(self, i_list, mean_reward, reward_list):
-        with open('result/sac_3.csv', 'w', newline='') as csvfile:
+        with open('./result/map4_/scan_24/sac_2.csv', 'w', newline='') as csvfile:
             # 建立 CSV 檔寫入器
             writer = csv.writer(csvfile)
 
@@ -148,7 +153,7 @@ class agent():
             writer.writerow(['奖励加总', reward_list])
 
     def save_(self):
-        torch.save(self.actor.state_dict(), './model/sac_model/model_params_2_3.pth')
+        torch.save(self.actor.state_dict(), './result/map4_/scan_24/sac_2.pth')
 
 
 if __name__ == '__main__':
@@ -158,67 +163,96 @@ if __name__ == '__main__':
     target_entropy = -2
     gamma = 0.99
     tau = 0.005
+    scan_num = 24
     num_action = 2
-    num_state = 25
+    num_state = scan_num + 1
     b_list = []
     reward_list_ = []
     reward_list_mean = []
-    # imitate_path = 'data/imitate_model/model_1.pth'
+    pre_model_path = './result/sports_world/scan_24/sac_pose24_2.pth'
 
-    rospy.init_node('text_listener', anonymous=True)
-    rate = rospy.Rate(50)
-    a = agent(num_state, num_action, q_lr, pi_lr, target_entropy, gamma, tau, alpha_lr)
+    rospy.init_node('DRL', anonymous=True)
+    rate = rospy.Rate(30)
+    a = agent(num_state, num_action, q_lr, pi_lr, target_entropy, gamma, tau, alpha_lr, pre_model_path)
     env = environment()
 
     done_frequency = 0
     chage_rew = True
-
+    arr = 0
     for i in range(1000):
         reward_list = []
         b_list.append(i)
-        print('第', i, '次游戏')
+        # print('第', i, '次游戏')
         action_index = 0
         episode_step = 0
         while True:
             # for i in range(10):
+            print('第', i, '次游戏')
             print('第', action_index, '个动作')
             action_index += 1
-            Target, scan_, pose, finish_pose, state_image = env.get_state()
-            # state = (a.image_tensor(state_image).unsqueeze(0), a.data_to_tensor(scan_).unsqueeze(0))
+            Target, scan_, pose, finish_pose, heading, finish_distance = env.get_state()
+
+            # finish_pose = np.random.normal(finish_pose, 0.001)
+            # pose = np.random.normal(pose, 0.001)
+            # finish_rebot_pose = np.hstack((finish_pose, pose))
+            # finish_rebot_pose = a.np_to_tensor(finish_rebot_pose).unsqueeze(0)
+            # heading_ = a.data_to_tensor(heading).unsqueeze(0).unsqueeze(0)
+
+            # finish_distance_ = a.np_to_tensor(np.float32(finish_distance))
+            # finish_distance_ = torch.tensor(np.float32(finish_distance)).unsqueeze(0).unsqueeze(0).to(a.device)
+
             re_data = []
-            for _ in range(24):
-                re_data.append(scan_[_ * (len(scan_) // 24)])
+            for _ in range(scan_num):
+                re_data.append(scan_[_ * (len(scan_) // scan_num)])
+
             state = torch.cat(
                 (a.data_to_tensor(Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(re_data).unsqueeze(0)), 1)
-
+            # print(state)
+            # print(state.shape)
             action, _ = a.actor(state)
             action = a.tensor_to_numpy(action.squeeze())
             print('action', action)
-            # if done_frequency >= 10:
-            #     chage_rew = False
-            next_Target, next_scan_, next_pose, next_finish_pose, reward, done, next_state_image = env.step(action,
-                                                                                                            True)
+
+            next_Target, next_scan_, next_pose, next_finish_pose, reward, done, next_heading, next_finish_distance = env.step(
+                action,
+                True)
+
+            # reward += action[1]
+
+            # next_finish_pose = np.random.normal(next_pose, 0.001)
+            # next_pose = np.random.normal(next_pose, 0.001)
+            # next_finish_rebot_pose = np.hstack((next_finish_pose, next_pose))
+            # next_finish_rebot_pose = a.np_to_tensor(next_finish_rebot_pose).unsqueeze(0)
+            heading_next = a.data_to_tensor(next_heading).unsqueeze(0).unsqueeze(0)
+
             re_data_next = []
-            for _ in range(24):
-                re_data_next.append(next_scan_[_ * (len(next_scan_) // 24)])
+            for _ in range(scan_num):
+                re_data_next.append(next_scan_[_ * (len(next_scan_) // scan_num)])
+
+            next_finish_distance_ = torch.tensor(np.float32(next_finish_distance)).unsqueeze(0).unsqueeze(0).to(
+                a.device)
+
             next_state = torch.cat(
-                (a.data_to_tensor(next_Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(re_data_next).unsqueeze(0)), 1)
+                (a.data_to_tensor(next_Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(re_data_next).unsqueeze(0)),
+                1)
 
             # print(next_state.shape)
             episode_step += 1
-            if episode_step == 200:
+            if episode_step == 300:
                 env.get_bummper = True
                 reward = -50
             print('reward=', reward)
             replay = a.Buffers.write_Buffers(state, next_state, reward, action, done)
             #
             if replay is not None:
-                a.train(replay)
+                a.train(replay, scan_num)
 
             reward_list.append(reward)
-
+            print('到达次数',arr)
             if env.get_goalbox:
-                env.chage_finish()
+                # env.chage_finish()
+                env.init_word()
+                arr += 1
                 print('reward_list', sum(reward_list))
                 reward_list_.append(sum(reward_list))
                 reward_list_mean.append(np.mean(reward_list_))

@@ -13,7 +13,7 @@ class img():
         self.bridge = CvBridge()
         self.train_index = 0
         self.text_index = 0
-        self.yolov7 = torch.hub.load('/home/a/yolov7', 'custom', './my_data_tiny/best.pt', source='local',
+        self.yolov7 = torch.hub.load('/home/a/yolov7', 'custom', '/home/a/yolov7/cap_data_tiny/best.pt', source='local',
                                      force_reload=False)
         self.yolov7.eval()
         self.last_time = time.time()
@@ -28,8 +28,9 @@ class img():
         with torch.no_grad():
             results = self.yolov7(cv_im)
             bboxes = np.array(results.pandas().xyxy[0])
+        print(bboxes)
         for i in bboxes:
-            if i[4] > 0.5:
+            if i[4] > 0:
                 x_f = (i[2] - i[0]) / 2 + i[0]
                 y_f = (i[3] - i[1]) / 2 + i[1]
                 self.bboxes_show(cv_im, i, (int(x_f), int(y_f)))

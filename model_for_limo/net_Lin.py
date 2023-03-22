@@ -6,10 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
+
 def weights_init_(m):
     if isinstance(m, nn.Linear):
         nn.init.xavier_uniform_(m.weight, gain=1)
         nn.init.constant_(m.bias, 0)
+
+
 class cnn(nn.Module):
     def __init__(self):
         super(cnn, self).__init__()
@@ -79,9 +82,13 @@ class Actor_Linear(nn.Module):
 
         self.apply(weights_init_)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    def forward(self, x):
-        # x_y_z = torch.cat((x, y), 1)
+
+    def forward(self, x, epsilon=1e-6):
+        # action, _ = a.actor(state)
         out = F.relu(self.h1(x))
+        # if x.shape[0] == 1:
+        #     print(x)
+        #     print(out)
         out = F.relu(self.h2(out))
         out = F.relu(self.h3(out))
 
@@ -89,20 +96,27 @@ class Actor_Linear(nn.Module):
         log_std = self.std(out)
 
         std = F.softplus(log_std)
+
         dist = Normal(mean, std)
 
         normal_sample = dist.rsample()  # 在标准化正态分布上采样
-        log_prob = dist.log_prob(normal_sample)  # 计算该值的标准正太分布上的概率
+        log_prob_ = dist.log_prob(normal_sample)  # 计算该值的标准正太分布上的概率
 
         # action = torch.tanh(normal_sample)  # 对数值进行tanh
 
         action = torch.zeros(normal_sample.shape[0], 2).to(self.device)
         action[:, 0] = torch.tanh(mean[:, 0])
-        action[:, 1] = torch.sigmoid(mean[:, 1])
+        action[:, 1] = torch.tanh(mean[:, 1])
 
         # 计算tanh_normal分布的对数概率密度
-        log_prob = log_prob - torch.log(1 - torch.tanh(action).pow(2) + 1e-7)  # 为了提升目标对应的概率值
+        log_prob = log_prob_ - torch.log(1 - torch.tanh(action).pow(2) + 1e-7)  # 为了提升目标对应的概率值
+        # print(log_prob.shape)
         # action = action * 2  # 对action求取范围
+
+        # log_prob = torch.zeros(normal_sample.shape[0], 2).to(self.device)
+        # log_prob[:, 0] = dist.log_prob(log_prob_)[:, 0] - torch.log(1 - torch.tanh(action[:, 0]).pow(2) + epsilon)
+        # log_prob[:, 1] = dist.log_prob(log_prob_)[:, 1] - torch.log(
+        #     torch.sigmoid(action[:, 1]) * (1 - torch.sigmoid(action[:, 1])) + epsilon)
 
         action[:, 0] = action[:, 0] * 2.5
         action[:, 1] = action[:, 1] * 0.22
@@ -146,32 +160,19 @@ class Actor_net(nn.Module):
 
         action = torch.zeros(x_t.shape[0], 2).to(self.device)
         action[:, 0] = torch.tanh(mean[:, 0])
-        action[:, 1] = torch.sigmoid(mean[:, 1])
+        action[:, 1] = torch.tanh(mean[:, 1])
 
         log_prob = normal.log_prob(x_t) - torch.log(1 - action.pow(2) + epsilon)
+
+        # log_prob = torch.zeros(x_t.shape[0], 2).to(self.device)
+        # log_prob[:, 0] = normal.log_prob(x_t)[:, 0] - torch.log(1 - torch.tanh(action[:, 0]).pow(2) + epsilon)
+        # log_prob[:, 1] = normal.log_prob(x_t)[:, 1] - torch.log(
+        #     torch.sigmoid(action[:, 1]) * (1 - torch.sigmoid(action[:, 1])) + epsilon)
 
         action[:, 0] = action[:, 0] * 2.5
         action[:, 1] = action[:, 1] * 0.22
 
         return action, log_prob
-
-    def get_action(self, state):
-        mean, log_std = self.forward(state)
-
-        std = log_std.exp()
-        print('log_std, mean', log_std, mean)
-        # std = abs(log_std)
-        normal = Normal(mean, std)
-        x_t = normal.rsample()
-
-        action = torch.zeros(x_t.shape[0], 2).to(self.device)
-        action[:, 0] = torch.tanh(x_t[:, 0])
-        action[:, 1] = torch.sigmoid(x_t[:, 1])
-
-        action[:, 0] = action[:, 0] * 2.5
-        action[:, 1] = action[:, 1] * 0.22
-
-        return action
 
 
 class Replay_Buffers():

@@ -5,16 +5,29 @@ from Env import environment
 from net_Lin import *
 import random
 import cv2
+from std_msgs.msg import String
 
 
 class agent():
     def __init__(self, num_state, num_action, path):
+        self.sub_done = rospy.Subscriber('/chatter', String, self.get_done)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.actor = Actor_net(num_state, num_action).to(self.device)
         self.actor.load_state_dict(torch.load(path))
-        self.yolov7 = torch.hub.load('/home/a/yolov7', 'custom', '/home/a/yolov7/my_data_tiny/best.pt', source='local',
+        self.yolov7 = torch.hub.load('/home/a/yolov7', 'custom', '/home/a/yolov7/my_data_tiny_new/best.pt',
+                                     source='local',
                                      force_reload=False)
+
+        # self.yolov7 = torch.hub.load('/home/a/yolov7', 'custom', '/home/a/yolov7/my_data_/best.pt',
+        #                              source='local',
+        #                              force_reload=False)
+
         self.yolov7.eval()
+
+        self.done = '0'
+
+    def get_done(self, done):
+        self.done = done.data
 
     def get_state(self, scan_, taget) -> torch.tensor:
         # pose_finish_pose = torch.cat((self.data_to_tensor(pose), self.data_to_tensor(finish_pose)), -1)
@@ -34,14 +47,15 @@ class agent():
 
     def resize_scan(self, scan):
         # print(len(list(set(scan))))
-        # temp = []
-        # x = len(list(set(scan))) // 24
-        # for i in range(24):
-        #     temp.append(list(set(scan))[i * x:(i + 1) * x:])
-        #
-        # print(temp)
-        # print(len(temp))
-        return random.sample(list(set(scan)), 24)
+        temp = []
+        x = len(list(set(scan))) // 24
+        for i in range(24):
+            temp.append(list(set(scan))[i * x:(i + 1) * x:])
+        scan = []
+        for c in temp:
+            scan.append(random.sample(c, 1))
+        return scan
+        # return random.sample(list(set(scan)), 24)
 
     def bboxes_show(self, img, bbox, midpoint):
         cv2.circle(img, midpoint, 1, (0, 0, 255), 4)
@@ -61,29 +75,35 @@ class agent():
         else:
             return [0, 0, 1]
 
+    def yolo_mid(self, midpoint):
+        return midpoint
+
 
 if __name__ == '__main__':
     rospy.init_node('text_listener', anonymous=True)
     rate = rospy.Rate(50)
     num_action = 2
-    num_state = 24 + 3
-    path = 'model/model_params.pth'
+    num_state = 24 + 1
+    path = 'model/imitate_model.pth'
     # path='model/model_best_.pth'
     a = agent(num_state, num_action, path)
     env = environment()
 
     # for i in range(10):
-    action_index = 0
+    # action_index = 0
+    train_index = 0
+    Target_in = -1
     while True:
         # for i in range(200):
-        print('第', action_index, '个动作')
-        action_index += 1
+        # print('第', action_index, '个动作')
+        # action_index += 1
         (x_f, y_f) = (None, None)
         Target, scan_, state_image = env.get_state()
         scan = a.resize_scan(scan_)
         with torch.no_grad():
             results = a.yolov7(state_image)
             bboxes = np.array(results.pandas().xyxy[0])
+
         for i in bboxes:
             if i[4] > 0.5:
                 x_f = (i[2] - i[0]) / 2 + i[0]
@@ -91,13 +111,29 @@ if __name__ == '__main__':
                 a.bboxes_show(state_image, i, (int(x_f), int(y_f)))
         cv2.imshow('img', state_image)
         cv2.waitKey(1)
-        Target = a.yolo_bbox_midpoint(state_image, (x_f, y_f))
-        print(Target)
-        state = torch.cat((a.data_to_tensor(Target).unsqueeze(0), a.data_to_tensor(scan).unsqueeze(0)), 1)
-        action, _ = a.actor(state)
 
-        # print(Target)
+        if x_f is None:
+            Target_ = -1
+        else:
+            Target_ = int(x_f * (100 / 640))
+            Target_in = Target_
+        # print(Target_in)
+        # print( a.data_to_tensor(scan).permute(1,0).shape)
+        # print(a.data_to_tensor(Target_).unsqueeze(0).unsqueeze(0).shape)
+        # print(Target_)
+        state = torch.cat(
+            (a.data_to_tensor(Target_in).unsqueeze(0).unsqueeze(0), a.data_to_tensor(scan).permute(1, 0)), 1)
+        # print(state)
+        action, _ = a.actor(state.to(a.device))
+        #
+        # # print(Target)
         action = a.tensor_to_numpy(action.squeeze())
-        print('action', action)
-        # next_Target, next_scan_, next_state_image = env.step(action)
+        print(action)
+        # print(action)
+        # print('action', action)
+        env.text_step(action, True)
+        # print(a.done)
+        if a.done == '1':
+            print('f')
+            break
         rate.sleep()

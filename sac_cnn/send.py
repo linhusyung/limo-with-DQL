@@ -9,6 +9,31 @@ from Env import environment
 from geometry_msgs.msg import Twist
 import cv2
 import csv
+import torch
+from net_Lin import *
+
+
+class agent():
+    def __init__(self, num_state, num_action, path):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.actor = Actor_net(num_state, num_action).to(self.device)
+        self.actor.load_state_dict(torch.load(path))
+
+    def get_state(self, scan_, taget) -> torch.tensor:
+        # pose_finish_pose = torch.cat((self.data_to_tensor(pose), self.data_to_tensor(finish_pose)), -1)
+        return torch.cat((self.data_to_tensor(scan_), self.data_to_tensor(taget)), -1)
+
+    def data_to_tensor(self, data):
+        return torch.tensor(data, dtype=torch.float).to(self.device)
+
+    def image_tensor(self, image):
+        return torch.from_numpy(image.transpose((2, 1, 0))).float().to(self.device)
+
+    def tensor_to_numpy(self, data):
+        return data.detach().cpu().numpy()
+
+    def np_to_tensor(self, data):
+        return torch.from_numpy(data).float().to(self.device)
 
 
 def movebase_client(finish_pose):
@@ -43,7 +68,7 @@ class sub():
 
 
 def save_variable(i_list, mean_reward, reward_list):
-    with open('result/2_3/navigation_test.csv', 'w', newline='') as csvfile:
+    with open('result/2_3/navigation_with_sac_imitate_test.csv', 'w', newline='') as csvfile:
         # 建立 CSV 檔寫入器
         writer = csv.writer(csvfile)
 
@@ -55,7 +80,13 @@ def save_variable(i_list, mean_reward, reward_list):
 
 if __name__ == '__main__':
     rospy.init_node('movebase_client_py')
+    movebase_client([-2,0])
     env = environment()
+    num_action = 2
+    num_state = 25
+    path = 'result/2_3/imitate_model.pth'
+    # fine_tuning_model_path='result/2_3/model_params_fine_tuning.pth'
+    a = agent(num_state, num_action, path)
     rate = rospy.Rate(30)
     sub = sub()
     # b = 0
@@ -68,11 +99,25 @@ if __name__ == '__main__':
         reward_list = []
         episode_step = 0
         while True:
-            movebase_client(env.finish_pose)
             Target, scan_, pose, finish_pose, state_image = env.get_state()
-            cmd_vel = rospy.Subscriber("cmd_vel", Twist, sub.get_target_vel)
-            next_Target, next_scan_, next_pose, next_finish_pose, reward, done, next_state_image = env.step(0,
-                                                                                                            True)
+            movebase_client(env.finish_pose)
+            # cmd_vel = rospy.Subscriber("cmd_vel", Twist, sub.get_target_vel)
+            # print(Target)
+            if Target != -1:
+                get_it = True
+            else:
+                get_it = False
+
+            re_data = []
+            for _ in range(24):
+                re_data.append(scan_[_ * (len(scan_) // 24)])
+            state = torch.cat(
+                (a.data_to_tensor(Target).unsqueeze(0).unsqueeze(0), a.data_to_tensor(re_data).unsqueeze(0)), 1)
+            action, _ = a.actor(state)
+            action = a.tensor_to_numpy(action.squeeze())
+
+            next_Target, next_scan_, next_pose, next_finish_pose, reward, done, next_state_image = env.text_step(action,
+                                                                                                                 get_it)
             print(reward)
             # if Target != -1:
             #     """
@@ -101,11 +146,11 @@ if __name__ == '__main__':
             #     b += 1
             # print(c)
             # c += 1
-            episode_step += 1
-            print(episode_step)
-            if episode_step == 50:
-                env.get_bummper = True
-                reward = -50
+            # episode_step += 1
+            # print(episode_step)
+            # if episode_step == 50:
+            #     env.get_bummper = True
+            #     reward = -50
             reward_list.append(reward)
             if env.get_goalbox:
                 env.chage_finish()
@@ -114,9 +159,9 @@ if __name__ == '__main__':
                 break
 
             if env.get_bummper:
-                env.chage_finish()
+                env.init_word()
                 reward_list_.append(sum(reward_list))
                 reward_list_mean.append(np.mean(reward_list_))
                 break
             rate.sleep()
-        save_variable(epoch_list, reward_list_mean, reward_list_)
+        # save_variable(epoch_list, reward_list_mean, reward_list_)
